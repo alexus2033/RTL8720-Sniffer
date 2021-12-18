@@ -18,7 +18,7 @@
 #include <list>
 #define CONFIG_PROMISC 1
 
-//switch serial output on/off
+//additional serial output
 #define DEBUG 1
 
 #if DEBUG == 1
@@ -32,17 +32,22 @@
 
 RTC rtc;
 SimpleCLI sCLI;
+Command cmdAdd;
 Command cmdScan;
 Command cmdStation;
 Command cmdTime;
 Command cmdScanTime;
 
 int32_t seconds;
-unsigned char searchedDevice[6] = {0xf0,0xe4,0xa2,0x44,0x55,0x66};  -> Enter MAC here!
+unsigned char searchedDevice[6] = {0xf0,0xe4,0xa2,0x44,0x55,0x66};  //-> Enter MAC here!
 struct tm *timeinfo;
 static rtw_result_t scan_result_handler(rtw_scan_handler_result_t* malloced_scan_result);
 static unsigned int currentCh = 0;
 static unsigned int scanTimePerChannel = 1000;
+static bool isRepeatActive = false;
+static bool verboseOutput = false;
+static int chFrom = 0;
+static int chTo = 0;
 
 struct WiFiSignal {
     unsigned char addr[6];
@@ -62,17 +67,18 @@ void setup() {
     digitalWrite(LED_R, HIGH);
     digitalWrite(LED_B, LOW);
 
-    Serial.begin(9600);
-    cmdScan = sCLI.addCmd("scan");
+    Serial.begin(115200);
+    cmdScan = sCLI.addCmd("scan", scan_callback);
     cmdScan.addPositionalArgument("ch","0");
     cmdScan.addPositionalArgument("to","0");
-    cmdScan.addFlagArgument("R"); //repeat
+    cmdScan.addFlagArgument("v"); //verbose
+    cmdScan.addFlagArgument("r"); //repeat
     cmdTime = sCLI.addCmd("time", time_callback);
     cmdTime.addPositionalArgument("h","12");
     cmdTime.addPositionalArgument("m","0");
     cmdTime.addPositionalArgument("s","0");
     cmdStation = sCLI.addCmd("station", station_callback);
-    cmdScanTime = sCLI.addCmd("ScanTime", scanTime_callback);
+    cmdScanTime = sCLI.addCmd("scanTime", scanTime_callback);
     cmdScanTime.addPositionalArgument("t","1000");
     
     debug("Firmware V");
@@ -109,7 +115,7 @@ void listen2Channel(byte chan){
        debug("listening failed for Ch ");
        debugln(chan);
     }
-    printSignals();
+    checkSignals();
     _signals.clear();
 }
 
@@ -156,6 +162,29 @@ void station_callback(cmd* c){
     }
 }
 
+void scan_callback(cmd* c) {
+    Command cmd(c); // Create wrapper object
+    Argument repeat = cmd.getArgument("r");
+    Argument verbo = cmd.getArgument("v");
+    Argument arg = cmd.getArgument("ch");
+    String argVal = arg.getValue();
+    chFrom = argVal.toInt();
+    arg = cmd.getArgument("to");
+    argVal = arg.getValue();
+    chTo = argVal.toInt();
+    chTo = std::max(chFrom, chTo); 
+    isRepeatActive=(repeat.isSet());
+    verboseOutput=(verbo.isSet());      
+    if(chFrom == 0){
+      //no channel parameter was set
+      scanUsedChannels();     
+    } else {
+      debug(chFrom);
+      debug("-");
+      debugln(chTo);
+      scanChannelRange(chFrom, chTo);
+    }         
+}
 
 void scanTime_callback(cmd* c) {
     Command cmd(c); // Create wrapper object
@@ -172,6 +201,7 @@ void scanTime_callback(cmd* c) {
 
 //set current time to RTC
 void time_callback(cmd* c) {
+    isRepeatActive = false;
     Command cmd(c); // Create wrapper object
     Argument arg = cmd.getArgument("h");
     String argVal = arg.getValue();
@@ -193,38 +223,24 @@ void time_callback(cmd* c) {
 }
 
 void loop() {
+    seconds = rtc.Read();
     if (Serial.available()) {
         // Read out string from the serial monitor
         String input = Serial.readStringUntil('\n');
         // Parse the user input into the CLI
         sCLI.parse(input);
     }
-    if(sCLI.available()){
-      Command cmd = sCLI.getCommand();
-      if(cmd == cmdScan){
-        Argument repeat = cmd.getArgument("R");
-        Argument arg = cmd.getArgument("ch");
-        String argVal = arg.getValue();
-        int from = argVal.toInt();
-        Serial.print(from);
-        arg = cmd.getArgument("to");
-        argVal = arg.getValue();
-        int to = argVal.toInt();
-        to = std::max(from, to);
-        Serial.print("-");
-        Serial.println(to);
-        do {
-          if(from == 0){
-            scanUsedChannels();     
-          } else {
-            scanChannelRange(from, to);
-          }
-          printTimeString();
-        } while(repeat.isSet());         
-      }
+    if(isRepeatActive){
+        if(chFrom == 0){
+          //no channel parameter was set
+          scanUsedChannels();     
+        } else {
+          scanChannelRange(chFrom, chTo);
+        }         
+        printTimeString(); 
+    } else {
+      rtc.Wait(1);
     }
-    seconds = rtc.Read();
-    rtc.Wait(1);
 }
 
 /*  Make callback simple to prevent latency to wlan rx when promiscuous mode */
@@ -295,22 +311,23 @@ static rtw_result_t scan_result_handler(rtw_scan_handler_result_t* malloced_scan
 }
 
 //print helper functions
-void printSignals() {
+void checkSignals() {
     std::list<WiFiSignal>::iterator next = _signals.begin();
     while(next != _signals.end())
     {
-        printMac(next->addr);
+        if(verboseOutput){  //print out all MACs
+          printMac(next->addr);
+          Serial.println("");
+        }
         if(searchedDevice[0]==next->addr[0] && searchedDevice[1]==next->addr[1] && 
            searchedDevice[2]==next->addr[2] && searchedDevice[3]==next->addr[3] && 
            searchedDevice[4]==next->addr[4] && searchedDevice[5]==next->addr[5]){
+          digitalWrite(LED_BUILTIN, HIGH); 
           Serial.print(" Ch ");
           Serial.print(currentCh);
-          Serial.print(" ");
+          Serial.print(" RSSI ");
           Serial.print(next->rssi);
-          Serial.println(" FOUND IT!");
-          digitalWrite(LED_BUILTIN, HIGH); 
-        } else {
-          Serial.println("");
+          Serial.println(" DETECTED!");
         }
         next++;
     }
