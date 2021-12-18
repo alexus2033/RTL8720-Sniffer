@@ -35,10 +35,14 @@ SimpleCLI sCLI;
 Command cmdScan;
 Command cmdStation;
 Command cmdTime;
+Command cmdScanTime;
+
 int32_t seconds;
+unsigned char searchedDevice[6] = {0xf0,0xe4,0xa2,0x44,0x55,0x66};  -> Enter MAC here!
 struct tm *timeinfo;
 static rtw_result_t scan_result_handler(rtw_scan_handler_result_t* malloced_scan_result);
 static unsigned int currentCh = 0;
+static unsigned int scanTimePerChannel = 1000;
 
 struct WiFiSignal {
     unsigned char addr[6];
@@ -60,7 +64,7 @@ void setup() {
 
     Serial.begin(9600);
     cmdScan = sCLI.addCmd("scan");
-    cmdScan.addPositionalArgument("ch","32");
+    cmdScan.addPositionalArgument("ch","0");
     cmdScan.addPositionalArgument("to","0");
     cmdScan.addFlagArgument("R"); //repeat
     cmdTime = sCLI.addCmd("time", time_callback);
@@ -68,14 +72,19 @@ void setup() {
     cmdTime.addPositionalArgument("m","0");
     cmdTime.addPositionalArgument("s","0");
     cmdStation = sCLI.addCmd("station", station_callback);
+    cmdScanTime = sCLI.addCmd("ScanTime", scanTime_callback);
+    cmdScanTime.addPositionalArgument("t","1000");
     
     debug("Firmware V");
     String fv = WiFi.firmwareVersion();  
     debug(fv);
     debugln(" detected");
+    station_callback(NULL);
+        
     Serial.println("Commands: station ,scan [from] [to], time [h] [m] [s]");
     delayMicroseconds(50);
     WiFi.disablePowerSave();
+    
     wifi_on(RTW_MODE_PROMISC);
   //wext_set_bw40_enable(true);
     wifi_enter_promisc_mode();
@@ -90,17 +99,42 @@ void setup() {
     }
 }
 
-//scan defined wifi-channel for MACs
-void scanChannel(u8 chan, u32 scanTimePerChannel){
+//sniff a single wifi-channel for MACs
+void listen2Channel(byte chan){
     currentCh = chan;
     digitalWrite(LED_R, LOW);
     if(wifi_set_channel(chan) == RTW_SUCCESS){
        delay(scanTimePerChannel); 
     } else {
-       debug("Scan failed for Ch ");
+       debug("listening failed for Ch ");
        debugln(chan);
     }
     printSignals();
+    _signals.clear();
+}
+
+void scanChannelRange(byte from, byte to){
+   digitalWrite(LED_BUILTIN, LOW);
+   for(byte ch = from; ch < to+1; ch ++){
+     //Channel 1..13    for 2.4 GHz (802.11b/g/n/ax)
+     //Channel 32..173  for 5 GHz (802.11a/h/j/n/ac/ax)
+     if(ch > 14 && (ch % 2)){
+       debug("Skip ch ");
+       debugln(ch);
+     } else {
+       listen2Channel(ch);
+     }
+   }
+}
+
+void scanUsedChannels(void){
+  digitalWrite(LED_BUILTIN, LOW);
+  std::list<WiFiSignal>::iterator next = _stations.begin();
+  while(next != _stations.end())
+  {
+    listen2Channel(next->channel);
+    next++; 
+  }
 }
 
 //list available stations
@@ -108,7 +142,6 @@ void station_callback(cmd* c){
     wifi_set_promisc(RTW_PROMISC_DISABLE, NULL, 0);
     wifi_on(RTW_MODE_STA);
     _stations.clear();
-    digitalWrite(LED_BUILTIN, LOW);
     //WiFi.scanNetworks() doesn´t return channel-IDs at the moment(!) 
     if(wifi_scan_networks(scan_result_handler, NULL) != RTW_SUCCESS){
       debugln("wifi_scan_networks() failed");
@@ -116,20 +149,25 @@ void station_callback(cmd* c){
     }
     // Wait for scan finished.
     vTaskDelay(6000);
-    printStations();
+    //printStations();
+    
     if(wifi_set_promisc(RTW_PROMISC_ENABLE_2, promisc_callback, 0) != RTW_SUCCESS){
       debugln("Init promisc failed!");
     }
 }
 
-void scanChannels(u8 *channels, u8 numberOfChannels, u32 scanTimePerChannel){
-    _signals.clear();
-    for(u8 ch = 0; ch < numberOfChannels; ch ++) {
-        if(wifi_set_channel(channels[ch]) == RTW_SUCCESS){
-          delay(scanTimePerChannel); 
-        }
+
+void scanTime_callback(cmd* c) {
+    Command cmd(c); // Create wrapper object
+    Argument arg = cmd.getArgument("t");
+    if(arg.isSet()){
+      Serial.print("scanTimePerChannel changed ");
+      Serial.print(scanTimePerChannel);
+      Serial.print(" -> ");
+      String argVal = arg.getValue();
+      scanTimePerChannel = argVal.toInt();
+      Serial.print(scanTimePerChannel);
     }
-    printSignals();
 }
 
 //set current time to RTC
@@ -164,6 +202,7 @@ void loop() {
     if(sCLI.available()){
       Command cmd = sCLI.getCommand();
       if(cmd == cmdScan){
+        Argument repeat = cmd.getArgument("R");
         Argument arg = cmd.getArgument("ch");
         String argVal = arg.getValue();
         int from = argVal.toInt();
@@ -174,19 +213,14 @@ void loop() {
         to = std::max(from, to);
         Serial.print("-");
         Serial.println(to);
-        for(byte ch = from; ch < to+1; ch ++){
-          //Channel 1..13    for 2.4 GHz (802.11b/g/n/ax)
-          //Channel 32..173  for 5 GHz (802.11a/h/j/n/ac/ax)
-          if(ch > 14 && (ch % 2)){
-            debug("Skip ch ");
-            debugln(ch);
+        do {
+          if(from == 0){
+            scanUsedChannels();     
           } else {
-            scanChannel(ch,1000);
+            scanChannelRange(from, to);
           }
-        }
-        _signals.clear();
-        printTimeString();         
-        digitalWrite(LED_BUILTIN, LOW);
+          printTimeString();
+        } while(repeat.isSet());         
       }
     }
     seconds = rtc.Read();
@@ -201,7 +235,6 @@ static void promisc_callback(unsigned char *buf, unsigned int len, void* userdat
 //        return;
     if(frameInfo->rssi == 0)
         return;
-    digitalWrite(LED_BUILTIN, HIGH);
     WiFiSignal wifisignal;
     wifisignal.rssi = frameInfo->rssi;
     wifisignal.channel = currentCh;
@@ -240,31 +273,50 @@ static rtw_result_t scan_result_handler(rtw_scan_handler_result_t* malloced_scan
     debug("|");
     debug(record->wps_type);
     debugln(( record->bss_type == RTW_BSS_TYPE_ADHOC ) ? "|Adhoc" : "|Infra" );
-    WiFiSignal wifisignal;
-    wifisignal.rssi = record->signal_strength;
-    wifisignal.channel = record->channel;
-    memcpy(&wifisignal.addr, record->BSSID.octet, 6);
-    _stations.push_back(wifisignal);
+    bool found = false;
+    std::list<WiFiSignal>::iterator next = _stations.begin();
+    while(next != _stations.end())
+    {
+        if(next->channel == record->channel){
+          found = true;
+          break; 
+        }
+        next++;
+    }
+    if(found == false){
+        WiFiSignal wifisignal;
+        wifisignal.rssi = record->signal_strength;
+        wifisignal.channel = record->channel;
+        memcpy(&wifisignal.addr, record->BSSID.octet, 6);
+        _stations.push_back(wifisignal); 
+    }
   }
   return RTW_SUCCESS;
 }
 
 //print helper functions
 void printSignals() {
-    delayMicroseconds(50);
     std::list<WiFiSignal>::iterator next = _signals.begin();
     while(next != _signals.end())
     {
         printMac(next->addr);
-        Serial.println(next->rssi);
+        if(searchedDevice[0]==next->addr[0] && searchedDevice[1]==next->addr[1] && 
+           searchedDevice[2]==next->addr[2] && searchedDevice[3]==next->addr[3] && 
+           searchedDevice[4]==next->addr[4] && searchedDevice[5]==next->addr[5]){
+          Serial.print(" Ch ");
+          Serial.print(currentCh);
+          Serial.print(" ");
+          Serial.print(next->rssi);
+          Serial.println(" FOUND IT!");
+          digitalWrite(LED_BUILTIN, HIGH); 
+        } else {
+          Serial.println("");
+        }
         next++;
     }
-    printf("\r\n");
 }
 
-
 void printStations() {
-    delayMicroseconds(50);
     std::list<WiFiSignal>::iterator next = _stations.begin();
     while(next != _stations.end())
     {
