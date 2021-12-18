@@ -7,7 +7,7 @@ Presence detection using [RTL8720DN](https://www.amebaiot.com/en/amebad-bw16-ard
 * [RTC](https://github.com/ambiot/ambd_arduino/blob/94b2bae9114552276e61581620aa5e3645e4de36/Arduino_package/hardware/libraries/RTC/examples/RTC/RTC.ino)
 
 ## Hardware
-* [RTL8720DN](https://www.amebaiot.com/en/amebad-bw16-arduino-getting-started) W16
+* [RTL8720DN](https://www.amebaiot.com/en/amebad-bw16-arduino-getting-started) (BW16)
 
 ## Usage
 The following Commands are availabe via USB-Serial (9600 Baud):
