@@ -1,6 +1,14 @@
 # RTL8720-Sniffer
 Presence detection using [RTL8720DN](https://www.amebaiot.com/en/amebad-bw16-arduino-getting-started) 2.4G/5G Dual Bands Wifi Module
 
+## Features
+* no connection needed, no passwords used
+* passive scan
+* scan channels used by stations
+* scan a range of channels only
+* modify the `scanTimePerChannel`
+* auto-repeat scans
+
 ## Used Libraries
 * [Ameba Arduino SDK](https://github.com/ambiot/ambd_arduino)
 * [SimpleCLI](https://github.com/SpacehuhnTech/SimpleCLI)
@@ -10,13 +18,15 @@ Presence detection using [RTL8720DN](https://www.amebaiot.com/en/amebad-bw16-ard
 * [RTL8720DN](https://www.amebaiot.com/en/amebad-bw16-arduino-getting-started) (BW16)
 
 ## Usage
-The following Commands are availabe via USB-Serial (9600 Baud):
+The following Commands are availabe via USB-Serial (115200 Baud):
 * `station` -> list all availabe wifi-stations in 2.4G/5G Spectrum
 
-* `scan [from] [to]` -> look for MAC-Addresses on [specified channels](https://en.wikipedia.org/wiki/List_of_WLAN_channels)
+* `scan [from] [to] [-v] [-r]` -> look for MAC-Addresses on [specified channels](https://en.wikipedia.org/wiki/List_of_WLAN_channels)
   - Channel 1..13    for 2.4 GHz (802.11b/g/n/ax)
   - Channel 32..173  for 5 GHz (802.11a/h/j/n/ac/ax)
+  - Repeat this command using `-r`
+  - Display all found MAC-Addresses using `-v`
   
-* `time [h] [m] [s]` -> set internal clock
+* `time [h] [m] [s]` -> set the internal clock
 
 
