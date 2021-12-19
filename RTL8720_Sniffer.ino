@@ -43,10 +43,13 @@ const char searchedDevice[18] = "09:0b:a2:33:44:AA";
 unsigned char device[6];
 struct tm *timeinfo;
 static rtw_result_t scan_result_handler(rtw_scan_handler_result_t* malloced_scan_result);
+static unsigned int statCount = 0;
+static unsigned int sigCount = 0;
 static unsigned int currentCh = 0;
 static unsigned int scanTimePerChannel = 1000;
 static bool isRepeatActive = false;
-static bool verboseOutput = false;
+static bool verboseScan = false;
+static bool verboseStat = false;
 static int chFrom = 0;
 static int chTo = 0;
 
@@ -79,8 +82,9 @@ void setup() {
     cmdTime.addPositionalArgument("m","0");
     cmdTime.addPositionalArgument("s","0");
     cmdStation = sCLI.addCmd("station", station_callback);
+    cmdStation.addFlagArgument("v"); //verbose
     cmdFilter = sCLI.addCmd("filter", filter_callback);
-    cmdFilter.addPositionalArgument("f");
+    cmdFilter.addPositionalArgument("mac");
     cmdScanTime = sCLI.addCmd("scanTime", scanTime_callback);
     cmdScanTime.addPositionalArgument("t","1000");
 
@@ -126,6 +130,7 @@ void listen2Channel(byte chan){
     _signals.clear();
 }
 
+//scan given range of channels
 void scanChannelRange(byte from, byte to){
    digitalWrite(LED_BUILTIN, LOW);
    for(byte ch = from; ch < to+1; ch ++){
@@ -140,6 +145,7 @@ void scanChannelRange(byte from, byte to){
    }
 }
 
+//scan channels used by stations
 void scanUsedChannels(void){
   digitalWrite(LED_BUILTIN, LOW);
   std::list<WiFiSignal>::iterator next = _stations.begin();
@@ -150,19 +156,38 @@ void scanUsedChannels(void){
   }
 }
 
+void scanMACs(void){
+  if(chFrom == 0){
+    //no channel parameter was set
+    scanUsedChannels();     
+  } else {
+    scanChannelRange(chFrom, chTo);
+  }         
+  printTimeString();
+  Serial.print(sigCount);
+  Serial.println(" MACs found");
+  sigCount=0;  
+}
+
 //list available stations
 void station_callback(cmd* c){
+    Argument verbo = cmdStation.getArgument("v");
+    verboseStat=(verbo.isSet());
     wifi_set_promisc(RTW_PROMISC_DISABLE, NULL, 0);
     wifi_on(RTW_MODE_STA);
     _stations.clear();
-    //WiFi.scanNetworks() doesn´t return channel-IDs at the moment(!) 
+    statCount = 0;
+    //WiFi.scanNetworks() doesn´t return channel-IDs with Version 3.1.0(!) 
     if(wifi_scan_networks(scan_result_handler, NULL) != RTW_SUCCESS){
       debugln("wifi_scan_networks() failed");
       return;
     }
     // Wait for scan finished.
-    vTaskDelay(6000);
-    //printStations();
+    vTaskDelay(5100);
+    Serial.print(statCount);
+    Serial.print(" Stations found, "); 
+    Serial.print(_stations.size());
+    Serial.println(" Channels used.");
     
     if(wifi_set_promisc(RTW_PROMISC_ENABLE_2, promisc_callback, 0) != RTW_SUCCESS){
       debugln("Init promisc failed!");
@@ -181,23 +206,19 @@ void scan_callback(cmd* c) {
     chTo = argVal.toInt();
     chTo = std::max(chFrom, chTo); 
     isRepeatActive=(repeat.isSet());
-    verboseOutput=(verbo.isSet());      
-    if(chFrom == 0){
-      //no channel parameter was set
-      scanUsedChannels();     
-    } else {
+    verboseScan=(verbo.isSet());      
+    if(chFrom != 0){
       debug(chFrom);
       debug("-");
       debugln(chTo);
-      scanChannelRange(chFrom, chTo);
     }
-    printTimeString();         
+    scanMACs();    
 }
 
 //set new MAC-Address
 void filter_callback(cmd* c) {
     Command cmd(c); // Create wrapper object
-    Argument arg = cmd.getArgument("f");
+    Argument arg = cmd.getArgument("mac");
     if(arg.isSet()){
       String mac = arg.getValue();
       char buffa[20];
@@ -246,9 +267,12 @@ void time_callback(cmd* c) {
     int epochTime = rtc.SetEpoch(2020, 1, 1, newHour, newMin, newSec);
     rtc.Write(epochTime);
     seconds = rtc.Read();
+    Serial.print("New time: ");
     printTimeString();
+    Serial.println();
 }
 
+//+++ MAIN LOOP +++
 void loop() {
     seconds = rtc.Read();
     if (Serial.available()) {
@@ -258,19 +282,13 @@ void loop() {
         sCLI.parse(input);
     }
     if(isRepeatActive){
-        if(chFrom == 0){
-          //no channel parameter was set
-          scanUsedChannels();     
-        } else {
-          scanChannelRange(chFrom, chTo);
-        }         
-        printTimeString(); 
+        scanMACs();
     } else {
       rtc.Wait(1);
     }
 }
 
-/*  Make callback simple to prevent latency to wlan rx when promiscuous mode */
+//make callback simple to prevent latency to wlan rx in promiscuous mode
 static void promisc_callback(unsigned char *buf, unsigned int len, void* userdata)
 {
     const ieee80211_frame_info_t *frameInfo = (ieee80211_frame_info_t *)userdata;
@@ -297,30 +315,33 @@ static void promisc_callback(unsigned char *buf, unsigned int len, void* userdat
     _signals.push_back(wifisignal);
 }
 
+//handle station search result
 static rtw_result_t scan_result_handler(rtw_scan_handler_result_t* malloced_scan_result){
-  static int ApNum = 0;
   if (malloced_scan_result->scan_complete != RTW_TRUE) {
     rtw_scan_result_t* record = &malloced_scan_result->ap_details;
     record->SSID.val[record->SSID.len] = 0; /* Ensure the SSID is null terminated */
 
-    debug(++ApNum);
-    debug("|");
-    String tempstr = reinterpret_cast<const char*>(record->SSID.val);
-    debug(tempstr);
-    debug("|");
-    debug(record->channel);
-    debug("|");
-    debug(record->signal_strength);
-    debug("|");
-    debug(record->wps_type);
-    debugln(( record->bss_type == RTW_BSS_TYPE_ADHOC ) ? "|Adhoc" : "|Infra" );
+    statCount++;
+    if(verboseStat){
+      Serial.print(statCount);
+      Serial.print("|");
+      String tempstr = reinterpret_cast<const char*>(record->SSID.val);
+      Serial.print(tempstr);
+      Serial.print("|");
+      Serial.print(record->channel);
+      Serial.print("|");
+      Serial.print(record->signal_strength);
+      Serial.print("|");
+      Serial.print(record->wps_type);
+      Serial.println(( record->bss_type == RTW_BSS_TYPE_ADHOC ) ? "|Adhoc" : "|Infra" );
+    }
     bool found = false;
     std::list<WiFiSignal>::iterator next = _stations.begin();
     while(next != _stations.end())
     {
         if(next->channel == record->channel){
           found = true;
-          break; 
+          break; //channel already listed 
         }
         next++;
     }
@@ -335,11 +356,12 @@ static rtw_result_t scan_result_handler(rtw_scan_handler_result_t* malloced_scan
   return RTW_SUCCESS;
 }
 
+//search the needle in the haystack
 void checkSignals() {
     std::list<WiFiSignal>::iterator next = _signals.begin();
     while(next != _signals.end())
     {
-        if(verboseOutput){  //print out all MACs
+        if(verboseScan){  //print out all MACs
           printMac(next->addr);
           Serial.println("");
         }
@@ -348,34 +370,23 @@ void checkSignals() {
            device[4]==next->addr[4] && device[5]==next->addr[5]){
           last_seen = seconds;
           digitalWrite(LED_BUILTIN, HIGH);
-          Serial.println(" DEVICE DETECTED! Ch ");
+          Serial.print(" DEVICE DETECTED! Ch ");
           Serial.print(currentCh);
           Serial.print(" RSSI ");
           Serial.println(next->rssi);
         }
         next++;
     }
+    sigCount += _signals.size();
 }
 
 //print helper functions
-void printStations() {
-    std::list<WiFiSignal>::iterator next = _stations.begin();
-    while(next != _stations.end())
-    {
-        printMac(next->addr);
-        Serial.print(" ");
-        Serial.print(next->channel);
-        Serial.println(next->rssi);
-        next++;
-    }
-}
-
 void printTimeString(void) {
     timeinfo = localtime(&seconds);
     char buffer[10];
-    sprintf(buffer,"%02d:%02d:%02d",
+    sprintf(buffer,"%02d:%02d:%02d ",
             timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-    Serial.println(buffer);
+    Serial.print(buffer);
 }
 
 void printMac(const unsigned char mac[6]) {
