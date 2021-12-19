@@ -21,7 +21,7 @@ Presence detection using [RTL8720DN](https://www.amebaiot.com/en/amebad-bw16-ard
 The following Commands are availabe via USB-Serial (115200 Baud):
 * `filter [mac]` -> set [MAC-Address](https://kb.wisc.edu/helpdesk/page.php?id=79258) of the searched device 
 
-* `station` -> list all availabe wifi-stations in 2.4G/5G Spectrum
+* `station [-v]` -> list all availabe wifi-stations in 2.4G/5G Spectrum
 
 * `scan [from] [to] [-v] [-r]` -> look for MAC-Addresses on [specified channels](https://en.wikipedia.org/wiki/List_of_WLAN_channels)
   - Channel 1..13    for 2.4 GHz (802.11b/g/n/ax)
