@@ -32,14 +32,15 @@
 
 RTC rtc;
 SimpleCLI sCLI;
-Command cmdAdd;
-Command cmdScan;
-Command cmdStation;
-Command cmdTime;
-Command cmdScanTime;
+Command cmdAdd ,cmdScan ,cmdStation;
+Command cmdFilter ,cmdTime ,cmdScanTime;
 
 int32_t seconds;
-unsigned char searchedDevice[6] = {0xf0,0xe4,0xa2,0x44,0x55,0x66};  //-> Enter MAC here!
+int32_t last_seen;
+
+//-> Enter MAC here or pass it via Serial-Command "filter"
+const char searchedDevice[18] = "09:0b:a2:33:44:AA";  
+unsigned char device[6];
 struct tm *timeinfo;
 static rtw_result_t scan_result_handler(rtw_scan_handler_result_t* malloced_scan_result);
 static unsigned int currentCh = 0;
@@ -78,16 +79,22 @@ void setup() {
     cmdTime.addPositionalArgument("m","0");
     cmdTime.addPositionalArgument("s","0");
     cmdStation = sCLI.addCmd("station", station_callback);
+    cmdFilter = sCLI.addCmd("filter", filter_callback);
+    cmdFilter.addPositionalArgument("f");
     cmdScanTime = sCLI.addCmd("scanTime", scanTime_callback);
     cmdScanTime.addPositionalArgument("t","1000");
-    
+
+    //pass MAC-Address to filter
+    sscanf( searchedDevice, "%2hhx:%2hhx:%2hhx:%2hhx:%2hhx:%2hhx", 
+          &device[0], &device[1], &device[2], &device[3], &device[4], &device[5]);
+          
     debug("Firmware V");
     String fv = WiFi.firmwareVersion();  
-    debug(fv);
-    debugln(" detected");
+    debugln(fv);
+    
     station_callback(NULL);
         
-    Serial.println("Commands: station ,scan [from] [to], time [h] [m] [s]");
+    Serial.println("Commands: station ,scan [from] [to], filter [mac], time [h] [m] [s]");
     delayMicroseconds(50);
     WiFi.disablePowerSave();
     
@@ -183,9 +190,29 @@ void scan_callback(cmd* c) {
       debug("-");
       debugln(chTo);
       scanChannelRange(chFrom, chTo);
-    }         
+    }
+    printTimeString();         
 }
 
+//set new MAC-Address
+void filter_callback(cmd* c) {
+    Command cmd(c); // Create wrapper object
+    Argument arg = cmd.getArgument("f");
+    if(arg.isSet()){
+      String mac = arg.getValue();
+      char buffa[20];
+      mac.toCharArray(buffa, 19);
+      sscanf( buffa, "%2hhx:%2hhx:%2hhx:%2hhx:%2hhx:%2hhx", 
+          &device[0], &device[1], &device[2], &device[3], &device[4], &device[5]);
+      Serial.print("Filter MAC: ");
+      printMac(device);
+      Serial.println();
+    } else {
+      Serial.println("Usage: filter 00:AA:BB:CC:DD:EE");
+    }
+}
+
+//set scan time per Channel parameter
 void scanTime_callback(cmd* c) {
     Command cmd(c); // Create wrapper object
     Argument arg = cmd.getArgument("t");
@@ -247,8 +274,6 @@ void loop() {
 static void promisc_callback(unsigned char *buf, unsigned int len, void* userdata)
 {
     const ieee80211_frame_info_t *frameInfo = (ieee80211_frame_info_t *)userdata;
-//    if(frameInfo->i_addr1[0] == 0xff && frameInfo->i_addr1[1] == 0xff && frameInfo->i_addr1[2] == 0xff && frameInfo->i_addr1[3] == 0xff && frameInfo->i_addr1[4] == 0xff && frameInfo->i_addr1[5] == 0xff)
-//        return;
     if(frameInfo->rssi == 0)
         return;
     WiFiSignal wifisignal;
@@ -310,7 +335,6 @@ static rtw_result_t scan_result_handler(rtw_scan_handler_result_t* malloced_scan
   return RTW_SUCCESS;
 }
 
-//print helper functions
 void checkSignals() {
     std::list<WiFiSignal>::iterator next = _signals.begin();
     while(next != _signals.end())
@@ -319,20 +343,21 @@ void checkSignals() {
           printMac(next->addr);
           Serial.println("");
         }
-        if(searchedDevice[0]==next->addr[0] && searchedDevice[1]==next->addr[1] && 
-           searchedDevice[2]==next->addr[2] && searchedDevice[3]==next->addr[3] && 
-           searchedDevice[4]==next->addr[4] && searchedDevice[5]==next->addr[5]){
-          digitalWrite(LED_BUILTIN, HIGH); 
-          Serial.print(" Ch ");
+        if(device[0]==next->addr[0] && device[1]==next->addr[1] && 
+           device[2]==next->addr[2] && device[3]==next->addr[3] && 
+           device[4]==next->addr[4] && device[5]==next->addr[5]){
+          last_seen = seconds;
+          digitalWrite(LED_BUILTIN, HIGH);
+          Serial.println(" DEVICE DETECTED! Ch ");
           Serial.print(currentCh);
           Serial.print(" RSSI ");
-          Serial.print(next->rssi);
-          Serial.println(" DETECTED!");
+          Serial.println(next->rssi);
         }
         next++;
     }
 }
 
+//print helper functions
 void printStations() {
     std::list<WiFiSignal>::iterator next = _stations.begin();
     while(next != _stations.end())
@@ -347,11 +372,10 @@ void printStations() {
 
 void printTimeString(void) {
     timeinfo = localtime(&seconds);
-    Serial.print(timeinfo->tm_hour);
-    Serial.print(":");
-    Serial.print(timeinfo->tm_min);
-    Serial.print(":");
-    Serial.println(timeinfo->tm_sec);
+    char buffer[10];
+    sprintf(buffer,"%02d:%02d:%02d",
+            timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+    Serial.println(buffer);
 }
 
 void printMac(const unsigned char mac[6]) {
