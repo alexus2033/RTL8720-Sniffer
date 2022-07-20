@@ -8,7 +8,7 @@
 ## 特征
 * 无需连接，无需密码
 * 被动扫描
-* 扫描`AP`使用的信道
+* 扫描`STA`使用的信道
 * 仅扫描一系列信道
 * 修改`scanTimePerChannel`
 * 自动重复扫描
@@ -25,7 +25,7 @@
 以下命令可通过Arduino IDE的串口监视器（115200 波特率）来执行：
 * `filter [mac]` -> 设置搜索设备的[MAC-Address](https://kb.wisc.edu/helpdesk/page.php?id=79258)
 
-* `station [-v]` -> 列出 2.4G/5G 频谱中的所有可用 wifi `AP`
+* `station [-v]` -> 列出 2.4G/5G 频谱中的所有可用 WiFi `Station`
 
 * `scan [from] [to] [-v] [-r]` -> 在选定的[信道](https://en.wikipedia.org/wiki/List_of_WLAN_channels) 上查找 MAC 地址
   - 通道 1..13 用于 2.4 GHz (802.11b/g/n/ax)
