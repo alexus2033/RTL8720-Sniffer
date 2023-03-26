@@ -1,4 +1,4 @@
-English (./README.md) | Deutsch | [中文](./README_CN.md)
+[English](./README.md) | Deutsch | [中文](./README_CN.md)
 
 # RTL8720-Sniffer
 Anwesenheitserkennung mit [RTL8720DN](https://www.amebaiot.com/en/amebad-bw16-arduino-getting-started) 2.4G/5G Dual Band WLAN Module
@@ -8,7 +8,7 @@ Anwesenheitserkennung mit [RTL8720DN](https://www.amebaiot.com/en/amebad-bw16-ar
 * passiver Scan
 * scan für ausgewählte Kanäle
 * scan für Kanäle, die von einem Accesspoint verwendet werden
-* `scanTimePerChannel` einstellbar
+* scan-dauer `scanTimePerChannel` einstellbar
 * automatische Wiederholung von Scans
 
 ## Verwendete Arduiono-Bibliotheken
