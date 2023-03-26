@@ -1,17 +1,17 @@
 [English](./README.md) | Deutsch | [中文](./README_CN.md)
 
 # RTL8720-Sniffer
-Anwesenheitserkennung mit [RTL8720DN](https://www.amebaiot.com/en/amebad-bw16-arduino-getting-started) 2.4G/5G Dual Band WLAN Module
+Anwesenheitserkennung mit [RTL8720DN](https://www.amebaiot.com/en/amebad-bw16-arduino-getting-started) 2.4G/5G Dual Band WLAN Modul
 
 ## Features
 * keine aktive Verbindung und keine Passwörter erforderlich
 * passiver Scan
-* scan für ausgewählte Kanäle
-* scan für Kanäle, die von einem Accesspoint verwendet werden
-* scan-dauer `scanTimePerChannel` einstellbar
+* Scan für ausgewählte Kanäle
+* Scan für Kanäle, die von einem Accesspoint verwendet werden
+* Scan-dauer über `scanTimePerChannel` einstellbar
 * automatische Wiederholung von Scans
 
-## Verwendete Arduiono-Bibliotheken
+## Verwendete Arduino-Bibliotheken
 * [Ameba Arduino SDK](https://github.com/ambiot/ambd_arduino)
 * [SimpleCLI](https://github.com/SpacehuhnTech/SimpleCLI)
 * [RTC](https://github.com/ambiot/ambd_arduino/blob/94b2bae9114552276e61581620aa5e3645e4de36/Arduino_package/hardware/libraries/RTC/examples/RTC/RTC.ino)
