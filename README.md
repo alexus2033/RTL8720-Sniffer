@@ -1,3 +1,7 @@
+English | [中文](./README_CN.md)
+
+---
+
 # RTL8720-Sniffer
 Presence detection using [RTL8720DN](https://www.amebaiot.com/en/amebad-bw16-arduino-getting-started) 2.4G/5G Dual Bands Wifi Module
 
