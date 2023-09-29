@@ -37,7 +37,7 @@ Die folgenden Befehle können über USB-Serial (115200 Baud) ausgeführt werden:
 Für alle WLAN-Verbindungen zwischen Sender und Empfänger werden sogenannte [MAC-Adressen](https://www.elektronik-kompendium.de/sites/net/1406201.htm) verwendet.
 Jedes Gerät verwendet eine eigene MAC und sendet diese zusammen mit den verschlüsselten Datenpaketen.
 Der Empfänger prüft die Adressen aller Pakete und filtert alle für ihn bestimmten Daten aus den Funksignalen heraus.
-Erst danach werden die Nutzdaten vom Empfänger entschlüsselt und alle anderen Pakete mt unbekannten Adressen werden ignoriert.
+Erst danach werden die Nutzdaten vom Empfänger entschlüsselt und alle anderen Pakete mit unbekannten Adressen werden ignoriert.
 
 ## Tracking
 Da die MAC-Adressen von allen in der Nähe befindlichen Geräten lesbar ist, könnte jemand diese aufzeichnen, und den Aufenthalt von Personen nachvollziehen.
@@ -49,7 +49,7 @@ Wenn sich z.B. ein Smartphone zum ersten Mal mit einem öffentlichen WLAN verbin
 Auf diese Weise lässt sich der Benutzer wiederfinden und entsprechend tracken, ohne die verschlüsselte Kommunikation zwischen Sender und Empfänger anzutasten.
 
 ## Anwesenheitserkennung
-RTL8720-Sniffer kann die oben genannte Schwachstelle nutzen, um die Anwesenheit von Personen im Haushalt zu erkennen und z.B. Licht oder Heizung automatisch eischalten.
+RTL8720-Sniffer kann die oben genannte Schwachstelle nutzen, um die Anwesenheit von Personen im Haushalt zu erkennen und z.B. Licht oder Heizung automatisch einschalten.
 Zunächst lässt sich mit dem Befehl `station` der Kanal feststellen, auf dem der heimische WLAN-Accesspoint sendet. 
 Über den Befehl `scan` können die Adressen aller Geräte ausfindig gemacht werden, welche auf dem Kanal der Station kommunizieren. 
-Hat man die Adresse des eigenen Handys gefunden, kann man diese mit dem Befehl `filter` speichern und einen automatischen Schaltvorgang auslösen, sobald eine Kommunikation registriert wird. In diesem Fall leuchtet die Board-LED grün auf.
+Hat man die [Adresse des eigenen Handys](https://kb.iu.edu/d/bbis) gefunden, kann man diese mit dem Befehl `filter` speichern und einen automatischen Schaltvorgang auslösen, sobald eine Kommunikation registriert wird. In diesem Fall leuchtet die Board-LED grün auf.
